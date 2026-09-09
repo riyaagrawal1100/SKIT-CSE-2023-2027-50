@@ -70,6 +70,10 @@ python 05_visualizations.py
 cd ../riya
 python 01_data_processing.py
 python 02_feature_engineering.py
+python 03_temporal_features.py
+python 04_geospatial_features.py
+python 05_customer_behavior_features.py
+python 06_documentation.md
 ```
 
 All intermediate/output CSVs (cleaned data, final model-ready dataset) are
