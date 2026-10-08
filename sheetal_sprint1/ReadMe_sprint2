@@ -1,0 +1,70 @@
+# XGBoost vs Random Forest
+A comparison of two popular tree-based ensemble methods for tabular data.
+## Core Difference
+- **Random Forest** builds many decision trees *independently* and combines them by averaging or voting. This technique is called **bagging**.
+- **XGBoost** builds trees *sequentially*, where each new tree corrects the errors of the previous ones. This technique is called **gradient boosting**.
+## Side-by-Side Comparison
+| Aspect | Random Forest | XGBoost |
+|---|---|---|
+| Ensemble method | Bagging (parallel, independent trees) | Gradient boosting (sequential, dependent trees) |
+| What each tree learns | The full target, on a random subset of rows and features | The residual errors (gradients) of the ensemble so far |
+| Tree depth | Deep, fully grown trees | Shallow trees (typically depth 3-8), weak learners |
+| Final prediction | Majority vote (classification) or average (regression) | Weighted sum of all trees' outputs |
+| Overfitting control | Mostly built in, since averaging reduces variance | Needs tuning: learning rate, max depth, L1/L2 regularization, early stopping |
+| Hyperparameter sensitivity | Low, works well with defaults | High, rewards careful tuning |
+| Training speed | Trees trained in parallel | Trees are sequential, but parallelized within each tree and heavily optimized |
+| Class imbalance | Needs `class_weight` or resampling | Has `scale_pos_weight` built in |
+| Missing values | Usually needs imputation | Handled natively |
+| Typical accuracy | Strong baseline | Often higher on tabular data when tuned |
+| Interpretability | Feature importance, fairly intuitive | Feature importance and SHAP, but more complex |
+## Bias vs Variance
+
+- Random Forest mainly reduces **variance** by averaging many high-variance, deep trees.
+- XGBoost mainly reduces **bias** by iteratively fixing mistakes, then uses regularization to keep variance in check.
+
+## When to Use Which
+
+**Choose Random Forest when:**
+- You want a quick, robust baseline.
+- The data is noisy.
+- You have limited time for hyperparameter tuning.
+
+**Choose XGBoost when:**
+- You want the best possible performance on tabular data.
+- You can afford careful tuning and cross-validation.
+- The dataset is imbalanced or has missing values.
+
+## Minimal Code Example
+
+```python
+from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
+
+# Random Forest
+rf = RandomForestClassifier(
+    n_estimators=200,
+    max_depth=None,
+    class_weight="balanced",
+    n_jobs=-1,
+    random_state=42,
+)
+rf.fit(X_train, y_train)
+
+# XGBoost
+xgb = XGBClassifier(
+    n_estimators=300,
+    learning_rate=0.1,
+    max_depth=6,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    scale_pos_weight=(y_train == 0).sum() / (y_train == 1).sum(),
+    eval_metric="aucpr",
+    random_state=42,
+)
+xgb.fit(X_train, y_train)
+```
+## Summary
+| | Random Forest | XGBoost |
+|---|---|---|
+| Strength | Robust, simple, low tuning effort | Higher accuracy potential, flexible |
+| Weakness | Can be outperformed by boosting | Easier to overfit, more tuning needed |
