@@ -470,3 +470,73 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    ef validate_bundle(bundle: dict) -> None:
+    """Sanity checks before training."""
+    X_train, X_test = bundle["X_train"], bundle["X_test"]
+    y_train, y_test = bundle["y_train"], bundle["y_test"]
+
+    if len(X_train) != len(y_train) or len(X_test) != len(y_test):
+        raise ValueError("Feature and target lengths do not match.")
+    if list(X_train.columns) != list(X_test.columns):
+        raise ValueError("Train and test columns differ.")
+    if TARGET_COL in X_train.columns:
+        raise ValueError(f"Target '{TARGET_COL}' found among the features (leakage).")
+    if X_train.isna().any().any() or X_test.isna().any().any():
+        raise ValueError("Prepared features contain NaN values.")
+    if not all(np.issubdtype(t, np.number) for t in X_train.dtypes):
+        raise ValueError("Prepared features must all be numeric.")
+    for name, y in (("train", y_train), ("test", y_test)):
+        if y.nunique() < 2:
+            raise ValueError(f"The {name} target has only one class.")
+
+    print(f"[OK] Validation passed | features: {X_train.shape[1]} | "
+          f"train rows: {len(X_train):,} | test rows: {len(X_test):,}")
+    print(f"     Train fraud rate: {100 * y_train.mean():.4f}% | "
+          f"Test fraud rate: {100 * y_test.mean():.4f}%")
+
+
+# --------------------------------------------------------------------------- #
+# Model and metrics
+# --------------------------------------------------------------------------- #
+def build_model(class_weight, n_estimators: int, seed: int) -> RandomForestClassifier:
+    """Baseline Random Forest. class_weight comes from the imbalance strategy in step 1."""
+    return RandomForestClassifier(
+        n_estimators=n_estimators,
+        min_samples_leaf=2,          # smooths leaves; avoids memorising single rows
+        class_weight=class_weight,   # 'balanced_subsample' when fraud is the minority
+        n_jobs=-1,
+        random_state=seed,
+    )
+
+
+def compute_metrics(y_true, y_proba, threshold: float = DECISION_THRESHOLD) -> dict:
+    """Threshold metrics plus threshold-free ROC-AUC and PR-AUC."""
+    y_pred = (y_proba >= threshold).astype(int)
+    tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
+    return {
+        "threshold": threshold,
+        "precision": float(precision_score(y_true, y_pred, zero_division=0)),
+        "recall": float(recall_score(y_true, y_pred, zero_division=0)),
+        "f1": float(f1_score(y_true, y_pred, zero_division=0)),
+        "roc_auc": float(roc_auc_score(y_true, y_proba)),
+        "pr_auc": float(average_precision_score(y_true, y_proba)),
+        "confusion_matrix": {
+            "true_negative": int(tn), "false_positive": int(fp),
+            "false_negative": int(fn), "true_positive": int(tp),
+        },
+    }
+
+
+def print_metrics(title: str, m: dict) -> None:
+    cm = m["confusion_matrix"]
+    print(f"\n--- {title} ---")
+    print(f"Precision : {m['precision']:.4f}")
+    print(f"Recall    : {m['recall']:.4f}")
+    print(f"F1-score  : {m['f1']:.4f}")
+    print(f"ROC-AUC   : {m['roc_auc']:.4f}")
+    print(f"PR-AUC    : {m['pr_auc']:.4f}")
+    print("Confusion matrix (rows = actual, cols = predicted)")
+    print(f"              Pred 0     Pred 1")
+    print(f"  Actual 0  {cm['true_negative']:>8,}   {cm['false_positive']:>8,}")
+    print(f"  Actual 1  {cm['false_negative']:>8,}   {cm['true_positive']:>8,}")
+
