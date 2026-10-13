@@ -178,3 +178,42 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         sys.exit(1)
+
+
+def load_training_data():
+    x_path = os.path.join(DATA_DIR, "X_train.csv")
+    y_path = os.path.join(DATA_DIR, "y_train.csv")
+
+    if not (os.path.exists(x_path) and os.path.exists(y_path)):
+        raise FileNotFoundError(
+            "Training data not found. Run 01_data_preparation.py first."
+        )
+
+    X_train = pd.read_csv(x_path)
+    y_train = pd.read_csv(y_path).iloc[:, 0]
+
+    return X_train, y_train
+
+
+def main():
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+
+    X_train, y_train = load_training_data()
+    print(f"Loaded training data: {X_train.shape[0]:,} rows x {X_train.shape[1]} columns")
+
+    n_pos = int((y_train == 1).sum())
+    n_neg = int((y_train == 0).sum())
+    scale_pos_weight = n_neg / n_pos
+    print(f"Training class balance -> fraud: {n_pos:,} | legit: {n_neg:,}")
+    print(f"scale_pos_weight fixed for the search: {scale_pos_weight:.2f}")
+
+    # n_jobs=1 on the estimator itself (parallelism is handled at the
+    # RandomizedSearchCV level below) to avoid CPU oversubscription between
+    # the outer search loop and each individual XGBoost fit.
+    base_model = xgb.XGBClassifier(
+        objective="binary:logistic",
+        eval_metric="aucpr",
+        scale_pos_weight=scale_pos_weight,
+        random_state=RANDOM_STATE,
+        n_jobs=1,
+    )
